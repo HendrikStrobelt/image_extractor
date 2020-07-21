@@ -48,24 +48,20 @@ example_file.png  - the best representative image w.r.t. heuristic
 
 #### From a set of PDFs:
 ```commandline
-python extract_image.py --pdf proceedings_*.pdf --cleanup
+python extract_image.py --pdf proceedings_*.pdf --cleanup all
 ```
 
 Applies the image extraction to the PDF files, 
-applies the simple histogram heuristic and cleans 
-up all temporary files. Everything runs on a CPU machine.
+applies the histogram heuristic plus first-page priority. 
+It cleans up all temporary files. It detects automatically 
+if running on cuda or cpu.
 
-#### From a set of PDFs - Just faster:
-Runs the script on a CUDA GPU if available 
-```commandline
-python extract_image.py --device cuda --pdf proceedings_*.pdf --cleanup
-```
 
 #### From a set of PDFs - Even faster:
-Uses the shortcut that if the first page contains an image,
-it uses this one.  
+Uses a shortcut that if the first page contains an image,
+it uses this one and does not parse the rest.  
 ```commandline
-python extract_image.py --shortcut --device cuda --pdf proceedings_*.pdf --cleanup
+python extract_image.py --firstpage shortcut --device cuda --pdf proceedings_*.pdf --cleanup
 ```
 
 ### Extract Images from Paper images
