@@ -2,16 +2,16 @@ import argparse
 import glob
 import json
 import os
-import time
+
 from math import log
-from PIL import Image, ImageFile
+
+import torch
+from PIL import ImageFile
 from detectron2.config import get_cfg
-from detectron2.data.detection_utils import read_image, _apply_exif_orientation, \
-    convert_PIL_to_numpy
 from detectron2.utils.logger import setup_logger
-import tqdm
 import numpy as np
-from fvcore.common.file_io import PathManager
+
+from extractor import PDF_Extractor
 from extractor.Extractor import Extractor
 
 __author__ = "Hendrik Strobelt, Alexander M. Rush"
@@ -74,7 +74,7 @@ def get_parser():
     parser.add_argument(
         "--device",
         help="run on device (cuda/cpu)",
-        default='cpu'
+        default=torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     )
     parser.add_argument(
         "--weights",
@@ -108,106 +108,10 @@ def get_parser():
 
     return parser
 
-
-def crop_regions_and_parse(predictions, img: Image.Image, prefix, accepted):
-    boxes = predictions.pred_boxes if predictions.has("pred_boxes") else None
-    scores = predictions.scores if predictions.has("scores") else None
-    classes = predictions.pred_classes if predictions.has(
-        "pred_classes") else None
-    num_predictions = len(predictions)
-
-    collected_imgs = []
-    max_x, max_y = img.size
-    box_list = None
-    if boxes:
-        box_list = boxes.tensor.tolist()
-        for i in range(num_predictions):
-            my_class = classes[i].tolist()
-            if (accepted == []) or (my_class in accepted):
-                # print(box_list[i], classes[i].tolist())
-                x0, y0, x1, y1 = box_list[i]
-                x0, y0, x1, y1 = max([x0 - 20, 0]), \
-                                 max([y0 - 20]), \
-                                 min([x1 + 20, max_x]), \
-                                 min([y1 + 20, max_y])
-
-                crop_img = img.crop([x0, y0, x1, y1])
-                collected_imgs.append(crop_img)
-                crop_img.save(
-                    '{}_{:04d}_type{}.png'.format(prefix, i, my_class))
-
-    return {
-               'boxes': box_list,
-               'classes': classes.tolist(),
-               'scores': scores.tolist()
-           }, collected_imgs
     # labels = _create_text_labels(classes, scores,
     #                              self.metadata.get("thing_classes", None))
     # keypoints = predictions.pred_keypoints if predictions.has(
     #     "pred_keypoints") else None
-
-
-def load_image(file_name, format):
-    with PathManager.open(file_name, "rb") as f:
-        image: Image.Image = Image.open(f)
-
-        # work around this bug: https://github.com/python-pillow/Pillow/issues/3973
-        # noinspection PyTypeChecker
-        image = _apply_exif_orientation(image)
-        # noinspection PyTypeChecker
-        return convert_PIL_to_numpy(image, format), image
-
-
-def run_extraction_for_images(inputs, accept, args):
-    all_cropped_imgs = []
-    for path in tqdm.tqdm(inputs):  # , disable=not args.output):
-        process_single_image(path, all_cropped_imgs, args, accept)
-    return all_cropped_imgs
-
-
-def process_single_image(path, all_cropped_imgs, args, accept):
-    prefix = os.path.splitext(path)[0]
-    result_file_name = '{}_scanned.json'.format(prefix)
-    if os.path.exists(result_file_name) and not args.overwrite:
-        #  just add cached segments
-        for cropped_img_name in glob.glob(prefix + '_????_type?.png'):
-            logger.info("loading {}".format(cropped_img_name))
-            all_cropped_imgs.append(Image.open(cropped_img_name))
-    else:
-        # use PIL, to be consistent with evaluation
-        np_img, pil_img = load_image(path, format="BGR")
-        start_time = time.time()
-        predictions = extractor.run_on_image(np_img)
-        # logger.info(predictions["instances"].get_fields().keys())
-        # logger.info(predictions["instances"].get("pred_classes"))
-        logger.info(
-            "{}: {} in {:.2f}s".format(
-                path,
-                "detected {} instances".format(
-                    len(predictions["instances"]))
-                if "instances" in predictions
-                else "finished",
-                time.time() - start_time,
-            )
-        )
-
-        info_dict, crop_imgs = crop_regions_and_parse(
-            predictions['instances'],
-            pil_img, prefix, accept)
-        all_cropped_imgs.extend(crop_imgs)
-        with open(result_file_name, 'w') as f:
-            json.dump(info_dict, f)
-
-
-def pdf_to_imgs(pdf_file_name):
-    command = (
-            "convert -background white  -alpha remove -alpha off -density 200 '"
-            + pdf_file_name
-            + "'[0-12]  png24:"
-            + os.path.splitext(pdf_file_name)[0]
-            + "-%04d.png"
-    )
-    return os.system(command)
 
 
 def get_histogram_dispersion(histogram):
@@ -240,7 +144,7 @@ if __name__ == '__main__':
         if len(args.input) == 1:
             args.input = glob.glob(os.path.expanduser(args.input[0]))
             assert args.input, "The input path(s) was not found"
-        run_extraction_for_images(args.input, args.accept, args)
+        extractor.run_extraction_for_images(args.input, args.accept, args, logger)
     elif args.pdf:
         if len(args.pdf) == 1:
             args.pdf = glob.glob(os.path.expanduser(args.pdf[0]))
@@ -251,21 +155,22 @@ if __name__ == '__main__':
             logger.info('Rendering pdf pages....')
             prefix = os.path.splitext(pdf_path)[0]
             master_file_name = prefix + '.json'
-            if (not args.overwrite and os.path.exists(master_file_name)) \
-                    or pdf_to_imgs(pdf_path) == 0:
-                logger.info('.. done. Finding images...')
-                page_files = glob.glob(os.path.expanduser(
-                    os.path.splitext(pdf_path)[0] + '-????.png'))
-                page_files.sort()
 
+            if (not args.overwrite and os.path.exists(master_file_name)) \
+                    or PDF_Extractor.pdf_to_imgs(pdf_path) == 0:
+                logger.info('.. done. Finding images...')
+
+                page_files = glob.glob(os.path.expanduser(os.path.splitext(pdf_path)[0] + '-????.png'))
+                page_files.sort()
                 with open(master_file_name, 'w') as f:
                     json.dump({"pages": page_files}, f)
 
+                # split to first page and rest
                 page0, *rest_page_files = page_files
 
                 cropped_images = []
-                process_single_image(page0, cropped_images, args,
-                                     accept=args.accept)
+
+                extractor.process_single_image(page0, cropped_images, args, accept=args.accept, logger=logger)
 
                 # == short cut if image on first page ==
                 best_candidate_found = False
@@ -277,19 +182,14 @@ if __name__ == '__main__':
                 if args.firstpage == 'shortcut':
                     logger.info('.. shortcut for {}. Done.'.format(pdf_path))
                 else:
-                    cropped_images_add = run_extraction_for_images(
-                        rest_page_files, args.accept, args)
+                    cropped_images_add = extractor.run_extraction_for_images(rest_page_files, args.accept, args, logger)
                     cropped_images.extend(cropped_images_add)
-                    disp_values = list(
-                        map(lambda x: get_histogram_dispersion(x.histogram()),
-                            cropped_images))
-                    sorted_indices = np.argsort(np.array(disp_values))[
-                                     ::-1].tolist()
+                    disp_values = list(map(lambda x: get_histogram_dispersion(x.histogram()), cropped_images))
+                    sorted_indices = np.argsort(np.array(disp_values))[::-1].tolist()
                     for i, index in enumerate(sorted_indices):
                         if i == 0 and not best_candidate_found:
                             cropped_images[index].save(prefix + '.png')
-                        cropped_images[index].save(
-                            '{}_best_{:04d}.png'.format(prefix, i))
+                        cropped_images[index].save('{}_best_{:04d}.png'.format(prefix, i))
                     logger.info('.. done.')
 
                 # === CLEANUP ===

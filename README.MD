@@ -7,6 +7,36 @@
 - install image magick
 - `cd weights;source download.sh;cd ..`
 
+1)  Create a conda env
+```commandline
+conda create -n image_ex python=3.7
+conda activate image_ex
+```
+2) install [Pytorch and TorchVision](https://pytorch.org/get-started/locally/#start-locally). 
+E.g.:
+```
+conda install pytorch torchvision cudatoolkit=10.2 -c pytorch
+# or: pip install torch torchvision
+```
+
+3) install opencv and imagemagick
+```
+conda install -c conda-forge opencv
+
+conda install -c conda-forge imagemagick
+# or: apt install imagemagick
+```
+
+4) install [Detectron2](https://github.com/facebookresearch/detectron2/blob/master/INSTALL.md#build-detectron2-from-source)
+
+- [Prebuilds](https://github.com/facebookresearch/detectron2/blob/master/INSTALL.md#install-pre-built-detectron2-linux-only) for Linux are easiest.
+- For MacOS use:
+```commandline
+CC=clang CXX=clang++ python -m pip install 'git+https://github.com/facebookresearch/detectron2.git'
+```
+
+
+
 ### Extract Image from PDF
 After extraction you should have the following files available for 
 a pdf `example_file.pdf`:
@@ -48,13 +78,12 @@ python extract_image.py --input pages_*.png
 ### Usage
 
 ```commandline
-usage: extract_image.py [-h] [--input INPUT [INPUT ...]]
-                                 [--pdf PDF [PDF ...]]
-                                 [--confidence-threshold CONFIDENCE_THRESHOLD]
-                                 [--opts ...] [--config-file FILE]
-                                 [--device DEVICE] [--weights WEIGHTS]
-                                 [--overwrite] [--shortcut] [--cleanup]
-                                 [--accept N [N ...]]
+usage: extract_image.py [-h] [--input INPUT [INPUT ...]] [--pdf PDF [PDF ...]]
+                        [--confidence-threshold CONFIDENCE_THRESHOLD]
+                        [--opts ...] [--config-file FILE] [--device DEVICE]
+                        [--weights WEIGHTS] [--overwrite]
+                        [--firstpage FIRSTPAGE] [--cleanup CLEANUP]
+                        [--accept N [N ...]]
 
 Extract interesting images from PDFs or paper page images - using PubLayNet
 and Detectron2 (pytorch) and a simple histogram heuristic.
@@ -77,10 +106,11 @@ optional arguments:
   --weights WEIGHTS     run on device (default:
                         weights/DLA_mask_rcnn_R_50_FPN_3x_trimmed.pth)
   --overwrite           run on device (default: False)
-  --shortcut            if image on first page use this (default: False)
-  --cleanup             remove tmp files (default: False)
+  --firstpage FIRSTPAGE
+                        if image on first page give it high priority --
+                        values: ['shortcut','prio','none'] (default: prio)
+  --cleanup CLEANUP     remove tmp files [images, pages, all] (default: none)
   --accept N [N ...]    accepted classes (default: [4])
-
 ```
 
 ### License
