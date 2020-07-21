@@ -3,10 +3,6 @@
 
 ### Setup Environment
 
-- conda
-- install image magick
-- `cd weights;source download.sh;cd ..`
-
 1)  Create a conda env
 ```commandline
 conda create -n image_ex python=3.7
