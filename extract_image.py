@@ -74,7 +74,7 @@ def get_parser():
     parser.add_argument(
         "--device",
         help="run on device (cuda/cpu)",
-        default=torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        default='cuda' if torch.cuda.is_available() else 'cpu'
     )
     parser.add_argument(
         "--weights",
