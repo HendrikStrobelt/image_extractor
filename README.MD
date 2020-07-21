@@ -31,6 +31,10 @@ conda install -c conda-forge imagemagick
 CC=clang CXX=clang++ python -m pip install 'git+https://github.com/facebookresearch/detectron2.git'
 ```
 
+5) Download weights: 
+
+`cd weights;source download.sh;cd ..`
+
 
 
 ### Extract Image from PDF
