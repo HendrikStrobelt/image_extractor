@@ -18,6 +18,7 @@ __author__ = "Hendrik Strobelt, Alexander M. Rush"
 
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
+
 def setup_cfg(args):
     # load config from file and command-line arguments
     cfg = get_cfg()
@@ -86,14 +87,16 @@ def get_parser():
         action='store_true'
     )
     parser.add_argument(
-        "--shortcut",
-        help="if image on first page use this",
-        action='store_true'
+        "--firstpage",
+        help="if image on first page give it high priority "
+             "-- values: ['shortcut','prio','none']",
+        default='prio'
+
     )
     parser.add_argument(
         "--cleanup",
-        help="remove tmp files",
-        action='store_true'
+        help="remove tmp files [images, pages, all]",
+        default='none'
     )
     parser.add_argument(
         '--accept',
@@ -246,13 +249,17 @@ if __name__ == '__main__':
         for pdf_path in args.pdf:
             logger.info(" =====> processing {}".format(pdf_path))
             logger.info('Rendering pdf pages....')
-            if pdf_to_imgs(pdf_path) == 0:
+            prefix = os.path.splitext(pdf_path)[0]
+            master_file_name = prefix + '.json'
+            if (not args.overwrite and os.path.exists(master_file_name)) \
+                    or pdf_to_imgs(pdf_path) == 0:
                 logger.info('.. done. Finding images...')
                 page_files = glob.glob(os.path.expanduser(
                     os.path.splitext(pdf_path)[0] + '-????.png'))
                 page_files.sort()
 
-                prefix = os.path.splitext(pdf_path)[0]
+                with open(master_file_name, 'w') as f:
+                    json.dump({"pages": page_files}, f)
 
                 page0, *rest_page_files = page_files
 
@@ -261,8 +268,13 @@ if __name__ == '__main__':
                                      accept=args.accept)
 
                 # == short cut if image on first page ==
-                if len(cropped_images) > 0 and args.shortcut:
+                best_candidate_found = False
+                if len(cropped_images) > 0 and (not (args.firstpage == 'none')):
                     cropped_images[0].save(prefix + '.png')
+                    best_candidate_found = True
+                    logger.info("chose first page")
+
+                if args.firstpage == 'shortcut':
                     logger.info('.. shortcut for {}. Done.'.format(pdf_path))
                 else:
                     cropped_images_add = run_extraction_for_images(
@@ -274,22 +286,24 @@ if __name__ == '__main__':
                     sorted_indices = np.argsort(np.array(disp_values))[
                                      ::-1].tolist()
                     for i, index in enumerate(sorted_indices):
-                        if i == 0:
+                        if i == 0 and not best_candidate_found:
                             cropped_images[index].save(prefix + '.png')
                         cropped_images[index].save(
                             '{}_best_{:04d}.png'.format(prefix, i))
                     logger.info('.. done.')
 
                 # === CLEANUP ===
-                if args.cleanup:
-                    for del_file in page_files:
-                        os.remove(del_file)
-                    for del_file in glob.glob(
-                            '{}-????_scanned.json'.format(prefix)):
-                        os.remove(del_file)
-                    for del_file in glob.glob(
-                            '{}-????_????_type?.png'.format(prefix)):
-                        os.remove(del_file)
+                if not args.cleanup == "none":
+                    if args.cleanup == "pages" or args.cleanup == 'all':
+                        for del_file in page_files:
+                            os.remove(del_file)
+                    if args.cleanup == "images" or args.cleanup == 'all':
+                        for del_file in glob.glob(
+                                '{}-????_scanned.json'.format(prefix)):
+                            os.remove(del_file)
+                        for del_file in glob.glob(
+                                '{}-????_????_type?.png'.format(prefix)):
+                            os.remove(del_file)
 
             else:
                 logger.error('Something went wrong.')
