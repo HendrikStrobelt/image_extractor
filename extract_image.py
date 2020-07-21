@@ -4,7 +4,7 @@ import json
 import os
 import time
 from math import log
-from PIL import Image
+from PIL import Image, ImageFile
 from detectron2.config import get_cfg
 from detectron2.data.detection_utils import read_image, _apply_exif_orientation, \
     convert_PIL_to_numpy
@@ -16,6 +16,7 @@ from extractor.Extractor import Extractor
 
 __author__ = "Hendrik Strobelt, Alexander M. Rush"
 
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 def setup_cfg(args):
     # load config from file and command-line arguments
