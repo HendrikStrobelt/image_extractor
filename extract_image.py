@@ -11,7 +11,7 @@ from detectron2.config import get_cfg
 from detectron2.utils.logger import setup_logger
 import numpy as np
 
-from extractor import PDF_Extractor
+from extractor.PdfExtractor import PdfExtractor
 from extractor.Extractor import Extractor
 
 __author__ = "Hendrik Strobelt, Alexander M. Rush"
@@ -157,7 +157,7 @@ if __name__ == '__main__':
             master_file_name = prefix + '.json'
 
             if (not args.overwrite and os.path.exists(master_file_name)) \
-                    or PDF_Extractor.pdf_to_imgs(pdf_path) == 0:
+                    or PdfExtractor.pdf_to_imgs(pdf_path) == 0:
                 logger.info('.. done. Finding images...')
 
                 page_files = glob.glob(os.path.expanduser(os.path.splitext(pdf_path)[0] + '-????.png'))
